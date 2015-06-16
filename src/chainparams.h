@@ -11,6 +11,7 @@
 #include "primitives/block.h"
 #include "protocol.h"
 
+#include <limits>
 #include <vector>
 
 struct CDNSSeedData {

@@ -60,6 +60,10 @@ static const unsigned int DEFAULT_DESCENDANT_SIZE_LIMIT = 101;
 static const unsigned int DEFAULT_MEMPOOL_EXPIRY = 72;
 /** The maximum size of a blk?????.dat file (since 0.8) */
 static const unsigned int MAX_BLOCKFILE_SIZE = 0x8000000; // 128 MiB
+/** Smallest possible serialized transaction, in bytes */
+static const unsigned int MIN_TRANSACTION_SIZE = 60;
+/** Minimum number of max-sized blocks in blk?????.dat files */
+static const unsigned int MIN_BLOCKFILE_BLOCKS = 128;
 /** The pre-allocation chunk size for blk?????.dat files (since 0.8) */
 static const unsigned int BLOCKFILE_CHUNK_SIZE = 0x1000000; // 16 MiB
 /** The pre-allocation chunk size for rev?????.dat files (since 0.8) */
@@ -329,7 +333,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsVi
 void UpdateCoins(const CTransaction& tx, CValidationState &state, CCoinsViewCache &inputs, int nHeight);
 
 /** Context-independent validity checks */
-bool CheckTransaction(const CTransaction& tx, CValidationState& state);
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, uint64_t nMaxTransactionSize);
 
 /**
  * Check if transaction is final and can be included in a block with the
@@ -507,5 +511,20 @@ static const unsigned int REJECT_HIGHFEE = 0x100;
 static const unsigned int REJECT_ALREADY_KNOWN = 0x101;
 /** Transaction conflicts with a transaction already known */
 static const unsigned int REJECT_CONFLICT = 0x102;
+// Time when bigger-than-1MB-blocks are allowed
+class SizeForkTime {
+public:
+    SizeForkTime(uint64_t _t);
+
+    // Same interface as std::atomic -- when c++11 is supported,
+    // this class can go away and sizeForkTime can just be type
+    // std::atomic<uint64_t>
+    uint64_t load() const;
+    void store(uint64_t _t);
+private:
+    mutable CCriticalSection cs;
+    uint64_t t;
+};
+extern SizeForkTime sizeForkTime;
 
 #endif // BITCOIN_MAIN_H

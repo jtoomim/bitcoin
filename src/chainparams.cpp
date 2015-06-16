@@ -95,6 +95,17 @@ public:
         nMaxTipAge = 24 * 60 * 60;
         nPruneAfterHeight = 100000;
 
+        // Timestamps for forking consensus rule changes:
+        //  Allow bigger blocks
+        consensus.nEarliestSizeForkTime = 1452470400; // 11 Jan 2016 00:00:00 UTC
+        // 1MB max blocks before 11 Jan 2016
+        // Then, if miner consensus: 8MB max, doubling every two years
+        consensus.nMaxSizePreFork = 1000*1000; // 1MB max pre-fork
+        consensus.nSizeDoubleEpoch = 60*60*24*365*2; // two years
+        consensus.nMaxSizeBase = 8*1000*1000; // 8MB
+        consensus.nMaxSizeDoublings = 10;
+        consensus.nActivateSizeForkMajority = 750; // 75% of hashpower to activate fork
+        consensus.nSizeForkGracePeriod = 60*60*24*14; // two week grace period after activation
         genesis = CreateGenesisBlock(1231006505, 2083236893, 0x1d00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         assert(consensus.hashGenesisBlock == uint256S("0x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"));
@@ -104,6 +115,8 @@ public:
         vSeeds.push_back(CDNSSeedData("bluematt.me", "dnsseed.bluematt.me")); // Matt Corallo
         vSeeds.push_back(CDNSSeedData("dashjr.org", "dnsseed.bitcoin.dashjr.org")); // Luke Dashjr
         vSeeds.push_back(CDNSSeedData("bitcoinstats.com", "seed.bitcoinstats.com")); // Christian Decker
+        vSeeds.push_back(CDNSSeedData("bitnodes.io", "seed.bitnodes.io"));            // Addy Yeow
+        vSeeds.push_back(CDNSSeedData("vinumeris.com", "dnsseed.vinumeris.com"));     // Mike Hearn
         vSeeds.push_back(CDNSSeedData("xf2.org", "bitseed.xf2.org")); // Jeff Garzik
         vSeeds.push_back(CDNSSeedData("bitcoin.jonasschnelli.ch", "seed.bitcoin.jonasschnelli.ch")); // Jonas Schnelli
 
@@ -172,6 +185,15 @@ public:
         nMaxTipAge = 0x7fffffff;
         nPruneAfterHeight = 1000;
 
+        // 1MB max blocks before 1 Aug 2015
+        // Then, if miner consensus: 8MB max, doubling every two years
+        consensus.nMaxSizePreFork = 1000*1000; // 1MB max pre-fork
+        consensus.nEarliestSizeForkTime = 1438387200; // 1 Aug 2015 00:00:00 UTC
+        consensus.nSizeDoubleEpoch = 60*60*24*365*2; // two years
+        consensus.nMaxSizeBase = 8*1000*1000; // 8MB
+        consensus.nMaxSizeDoublings = 10;
+        consensus.nActivateSizeForkMajority = 75; // 75 of 100 to activate fork
+        consensus.nSizeForkGracePeriod = 60*60*24; // 1-day grace period
         genesis = CreateGenesisBlock(1296688602, 414098458, 0x1d00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
         assert(consensus.hashGenesisBlock == uint256S("0x000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"));
@@ -217,11 +239,10 @@ public:
     CRegTestParams() {
         strNetworkID = "regtest";
         consensus.nSubsidyHalvingInterval = 150;
-        consensus.nMajorityEnforceBlockUpgrade = 750;
-        consensus.nMajorityRejectBlockOutdated = 950;
-        consensus.nMajorityWindow = 1000;
-        consensus.BIP34Height = -1; // BIP34 has not necessarily activated on regtest
-        consensus.BIP34Hash = uint256();
+        // Make forks on regtest the same as mainnet but 10x easier, to speed up the regression tests.
+        consensus.nMajorityEnforceBlockUpgrade = 75;
+        consensus.nMajorityRejectBlockOutdated = 95;
+        consensus.nMajorityWindow = 100;
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 10 * 60;

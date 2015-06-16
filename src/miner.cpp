@@ -96,21 +96,6 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
     pblocktemplate->vTxFees.push_back(-1); // updated at end
     pblocktemplate->vTxSigOps.push_back(-1); // updated at end
 
-    // Largest block you're willing to create:
-    unsigned int nBlockMaxSize = GetArg("-blockmaxsize", DEFAULT_BLOCK_MAX_SIZE);
-    // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
-    nBlockMaxSize = std::max((unsigned int)1000, std::min((unsigned int)(MAX_BLOCK_SIZE-1000), nBlockMaxSize));
-
-    // How much of the block should be dedicated to high-priority transactions,
-    // included regardless of the fees they pay
-    unsigned int nBlockPrioritySize = GetArg("-blockprioritysize", DEFAULT_BLOCK_PRIORITY_SIZE);
-    nBlockPrioritySize = std::min(nBlockMaxSize, nBlockPrioritySize);
-
-    // Minimum block size you want to create; block will be filled with free transactions
-    // until there are no more or the block reaches this size:
-    unsigned int nBlockMinSize = GetArg("-blockminsize", DEFAULT_BLOCK_MIN_SIZE);
-    nBlockMinSize = std::min(nBlockMaxSize, nBlockMinSize);
-
     // Collect memory pool transactions into the block
     CTxMemPool::setEntries inBlock;
     CTxMemPool::setEntries waitSet;
@@ -136,6 +121,26 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
         const int nHeight = pindexPrev->nHeight + 1;
         pblock->nTime = GetAdjustedTime();
         const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
+
+        UpdateTime(pblock, Params().GetConsensus(), pindexPrev);
+        uint64_t nBlockTime = pblock->GetBlockTime();
+
+        // Largest block you're willing to create:
+        uint64_t nBlockMaxSize = GetArg("-blockmaxsize", DEFAULT_BLOCK_MAX_SIZE);
+        uint64_t nConsensusMaxSize = chainparams.GetConsensus().MaxBlockSize(nBlockTime, sizeForkTime.load());
+        // Limit to betweeen 1K and MAX_BLOCK_SIZE-1K for sanity:
+        nBlockMaxSize = std::max((uint64_t)1000,
+                                 std::min(nConsensusMaxSize-1000, nBlockMaxSize));
+
+        // How much of the block should be dedicated to high-priority transactions,
+        // included regardless of the fees they pay
+        uint64_t nBlockPrioritySize = GetArg("-blockprioritysize", DEFAULT_BLOCK_PRIORITY_SIZE);
+        nBlockPrioritySize = std::min(nBlockMaxSize, nBlockPrioritySize);
+
+        // Minimum block size you want to create; block will be filled with free transactions
+        // until there are no more or the block reaches this size:
+        uint64_t nBlockMinSize = GetArg("-blockminsize", DEFAULT_BLOCK_MIN_SIZE);
+        nBlockMinSize = std::min(nBlockMaxSize, nBlockMinSize);
 
         int64_t nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
                                 ? nMedianTimePast
@@ -224,8 +229,8 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
                 continue;
 
             unsigned int nTxSigOps = iter->GetSigOpCount();
-            if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS) {
-                if (nBlockSigOps > MAX_BLOCK_SIGOPS - 2) {
+            if (nBlockSigOps + nTxSigOps >= chainparams.GetConsensus().MaxBlockSigops(nBlockTime, sizeForkTime.load())) {
+                if (nBlockSigOps > chainparams.GetConsensus().MaxBlockSigops(nBlockTime, sizeForkTime.load()) - 2) {
                     break;
                 }
                 continue;

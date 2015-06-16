@@ -15,6 +15,7 @@
 #include "consensus/consensus.h"
 #include "crypto/common.h"
 #include "hash.h"
+#include "main.h"
 #include "primitives/transaction.h"
 #include "scheduler.h"
 #include "ui_interface.h"
@@ -2124,7 +2125,9 @@ void CNode::RecordBytesSent(uint64_t bytes)
 void CNode::SetMaxOutboundTarget(uint64_t limit)
 {
     LOCK(cs_totalBytesSent);
-    uint64_t recommendedMinimum = (nMaxOutboundTimeframe / 600) * MAX_BLOCK_SIZE;
+    const CChainParams& chainparams = Params();
+    uint64_t nMaxBlocksize = chainparams.GetConsensus().MaxBlockSize(GetAdjustedTime(), sizeForkTime.load());
+    uint64_t recommendedMinimum = (nMaxOutboundTimeframe / 600) * nMaxBlocksize;
     nMaxOutboundLimit = limit;
 
     if (limit > 0 && limit < recommendedMinimum)
@@ -2175,11 +2178,13 @@ bool CNode::OutboundTargetReached(bool historicalBlockServingLimit)
     if (nMaxOutboundLimit == 0)
         return false;
 
+    const CChainParams& chainparams = Params();
+    uint64_t nMaxBlocksize = chainparams.GetConsensus().MaxBlockSize(GetAdjustedTime(), sizeForkTime.load());
     if (historicalBlockServingLimit)
     {
         // keep a large enought buffer to at least relay each block once
         uint64_t timeLeftInCycle = GetMaxOutboundTimeLeftInCycle();
-        uint64_t buffer = timeLeftInCycle / 600 * MAX_BLOCK_SIZE;
+        uint64_t buffer = timeLeftInCycle / 600 * nMaxBlocksize;
         if (buffer >= nMaxOutboundLimit || nMaxOutboundTotalBytesSentInCycle >= nMaxOutboundLimit - buffer)
             return true;
     }
