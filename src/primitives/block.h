@@ -10,8 +10,18 @@
 #include "serialize.h"
 #include "uint256.h"
 
-/** Blocks with version fields that have these bits set activate the bigger-block fork */
-const unsigned int SIZE_FORK_VERSION = 0x20000007;
+/** Blocks with version fields that have these bits set activate the bigger-block fork.
+ * - First three bits are 001 to indicate version bits usage.
+ * - Last three bits are 000 because legacy softforks up to version 4 have been deployed. 
+ * - BIP101 also uses the bit with value 4 (conflicting with BIP65).
+ * - The next available bit has value 8, so we use that. 
+ * - Note to future legacy soft-fork writers: please use
+ *    (nVersion >= new_minimum && 
+ *     !(nVersion ^ 0x20000000 & 0xD0000000 ))
+ *   in your tests in order to avoid misinterpreting version bits usage as support for
+ *   your as-yet-unwritten feature, as happened with BIP101 and BIP65.
+ */
+const unsigned int SIZE_FORK_VERSION = 0x20000008; 
 
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
@@ -25,7 +35,7 @@ class CBlockHeader
 public:
     static const int32_t CURRENT_VERSION=SIZE_FORK_VERSION;
     // This code knows the rules for these block versions:
-    static const int32_t UNDERSTOOD_VERSIONS = (SIZE_FORK_VERSION | 3 | 2 | 1);
+    static const int32_t UNDERSTOOD_VERSIONS = (SIZE_FORK_VERSION | 4 | 3 | 2 | 1);
 
     // header
     int32_t nVersion;
