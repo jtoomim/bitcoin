@@ -56,15 +56,15 @@ public:
 
         // Timestamps for forking consensus rule changes:
         //  Allow bigger blocks
-        consensus.nEarliestSizeForkTime = 1452470400; // 11 Jan 2016 00:00:00 UTC
+        consensus.nEarliestSizeForkTime = 1456790400; // 01 Mar 2016 00:00:00 UTC
         // 1MB max blocks before 11 Jan 2016
         // Then, if miner consensus: 8MB max, doubling every two years
         consensus.nMaxSizePreFork = 1000*1000; // 1MB max pre-fork
         consensus.nSizeDoubleEpoch = 60*60*24*365*2; // two years
-        consensus.nMaxSizeBase = 8*1000*1000; // 8MB
-        consensus.nMaxSizeDoublings = 10;
+        consensus.nMaxSizeBase = 2*1000*1000; // 2MB
+        consensus.nMaxSizeDoublings = 1; // end at 4MB
         consensus.nActivateSizeForkMajority = 750; // 75% of hashpower to activate fork
-        consensus.nSizeForkGracePeriod = 60*60*24*14; // two week grace period after activation
+        consensus.nSizeForkGracePeriod = 60*60*24*28; // four week grace period after activation
 
         /**
          * Build the genesis block. Note that the output of its generation
@@ -166,10 +166,10 @@ public:
         // 1MB max blocks before 1 Aug 2015
         // Then, if miner consensus: 8MB max, doubling every two years
         consensus.nMaxSizePreFork = 1000*1000; // 1MB max pre-fork
-        consensus.nEarliestSizeForkTime = 1438387200; // 1 Aug 2015 00:00:00 UTC
+        consensus.nEarliestSizeForkTime = 1393632000; // 01 Mar 2014 00:00:00 UTC, 2 years ahead of mainnet
         consensus.nSizeDoubleEpoch = 60*60*24*365*2; // two years
-        consensus.nMaxSizeBase = 8*1000*1000; // 8MB
-        consensus.nMaxSizeDoublings = 10;
+        consensus.nMaxSizeBase = 2*1000*1000; // 2MB
+        consensus.nMaxSizeDoublings = 2; // End at 8MB; intentionally different from mainnet
         consensus.nActivateSizeForkMajority = 75; // 75 of 100 to activate fork
         consensus.nSizeForkGracePeriod = 60*60*24; // 1-day grace period
 
