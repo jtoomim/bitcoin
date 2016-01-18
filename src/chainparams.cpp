@@ -58,7 +58,7 @@ public:
         //  Allow bigger blocks
         consensus.nEarliestSizeForkTime = 1456790400; // 01 Mar 2016 00:00:00 UTC
         // 1MB max blocks before 1 Mar 2016
-        // Then, if miner consensus: 2MB max, doubling over two years
+        // Then, if miner consensus: 2MB limit to start, doubling over two years
         consensus.nMaxSizePreFork = 1000*1000; // 1MB max pre-fork
         consensus.nSizeDoubleEpoch = 60*60*24*365*2; // two years
         consensus.nMaxSizeBase = 2*1000*1000; // 2MB
@@ -164,7 +164,7 @@ public:
         nPruneAfterHeight = 1000;
 
         // 1MB max blocks before 1 Mar 2014
-        // Then, if miner consensus: 2MB max, doubling twice over two years
+        // Then, if miner consensus: 2MB limit to start, doubling twice over two years
         consensus.nMaxSizePreFork = 1000*1000; // 1MB max pre-fork
         consensus.nEarliestSizeForkTime = 1393632000; // 01 Mar 2014 00:00:00 UTC, 2 years ahead of mainnet
         consensus.nSizeDoubleEpoch = 60*60*24*365*2; // two years
