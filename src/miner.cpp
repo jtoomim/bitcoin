@@ -103,10 +103,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
     uint64_t maxSighashBytes = chainparams.GetConsensus().MaxBlockSighashBytes(pblock->GetBlockTime(), sizeForkTime.load());
     BlockValidationResourceTracker resourceTracker(maxAccurateSigops, maxSighashBytes);
 
-    // -regtest only: allow overriding block.nVersion with
-    // -blockversion=N to test forking scenarios
-    if (Params().MineBlocksOnDemand())
-        pblock->nVersion = GetArg("-blockversion", pblock->nVersion);
+
 
     // Create coinbase tx
     CMutableTransaction txNew;
@@ -130,6 +127,12 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
         pblock->nTime = GetAdjustedTime();
         const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
         CCoinsViewCache view(pcoinsTip);
+
+        pblock->nVersion = BASE_VERSION | ForkBits(pblock->nTime);
+        // -regtest only: allow overriding block.nVersion with
+        // -blockversion=N to test forking scenarios
+        if (Params().MineBlocksOnDemand())
+            pblock->nVersion = GetArg("-blockversion", pblock->nVersion);
 
         UpdateTime(pblock, Params().GetConsensus(), pindexPrev);
         uint64_t nBlockTime = pblock->GetBlockTime();

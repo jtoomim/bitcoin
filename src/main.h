@@ -551,5 +551,6 @@ private:
     uint64_t t;
 };
 extern SizeForkTime sizeForkTime;
+uint32_t ForkBits(uint32_t nTime);
 
 #endif // BITCOIN_MAIN_H

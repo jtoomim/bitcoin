@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2013 The Bitcoin Core developers
+// Copyright (c) 2009-2016 The Bitcoin Core and Bitcoin Classic developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,23 +10,10 @@
 #include "serialize.h"
 #include "uint256.h"
 
-/** Blocks with version fields that have these bits set activate the bigger-block fork.
- * - First three bits are 001 to indicate version bits usage.
- * - Last three bits are 000 because legacy softforks up to version 4 have been deployed.
- * - BIP101 also uses the bit with value 4 (conflicting with BIP65).
- * - The next available bit has value 8, so we use that.
- * - Note to future legacy soft-fork writers: please use something like
- *       if (nVersion >= new_minimum && !(nVersion ^ 0x20000000 & 0xD0000000 ))
- *   or
- *       if ((nVersion & 7 ) >= 5)
- *   in your tests in order to avoid misinterpreting version bits usage as support for
- *   your as-yet-unwritten feature, as happened with BIP101 and BIP65.
- * - This implementation of version bits is incomplete. It needs to change the version
- *   back to 0x20000000 after either the fork is successful or after some arbitrary
- *   amount of time has passed (e.g. 2 years).
- */
-const unsigned int SIZE_FORK_VERSION = 0x20000008;
 
+const uint32_t BASE_VERSION = 0x20000000;
+const uint32_t FORK_BIT_2MB = 0x10000000;
+const bool DEFAULT_2MB_VOTE = false;
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
  * requirements.  When they solve the proof-of-work, they broadcast the block
@@ -37,9 +24,9 @@ const unsigned int SIZE_FORK_VERSION = 0x20000008;
 class CBlockHeader
 {
 public:
-    static const int32_t CURRENT_VERSION=SIZE_FORK_VERSION;
+    static const int32_t CURRENT_VERSION = BASE_VERSION;
     // This code knows the rules for these block versions:
-    static const int32_t UNDERSTOOD_VERSIONS = (SIZE_FORK_VERSION | 4 | 3 | 2 | 1);
+    static const int32_t UNDERSTOOD_VERSIONS = (BASE_VERSION | FORK_BIT_2MB | 4 | 3 | 2 | 1);
 
     // header
     int32_t nVersion;

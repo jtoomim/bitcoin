@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2009-2016 The Bitcoin Core and Bitcoin Classic developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1904,9 +1904,9 @@ static int64_t nTimeCallbacks = 0;
 static int64_t nTimeTotal = 0;
 
 static bool DidBlockTriggerSizeFork(const CBlock &block, const CBlockIndex *pindex, const CChainParams &chainparams) {
-    return ((block.nVersion & SIZE_FORK_VERSION) == SIZE_FORK_VERSION) &&
-           (pblocktree->ForkActivated(SIZE_FORK_VERSION) == uint256()) &&
-           IsSuperMajority(SIZE_FORK_VERSION, pindex, chainparams.GetConsensus().ActivateSizeForkMajority(), chainparams.GetConsensus(), true /* use bitmask */);
+    return ((block.nVersion & FORK_BIT_2MB) == FORK_BIT_2MB) &&
+           (pblocktree->ForkBitActivated(FORK_BIT_2MB) == uint256()) &&
+           IsSuperMajority(FORK_BIT_2MB, pindex, chainparams.GetConsensus().ActivateSizeForkMajority(), chainparams.GetConsensus(), true /* use bitmask */);
 }
 
 bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& view, bool fJustCheck)
@@ -2100,7 +2100,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         uint64_t tAllowBigger = block.nTime + chainparams.GetConsensus().SizeForkGracePeriod();
         LogPrintf("%s: Max block size fork activating at time %d, bigger blocks allowed at time %d\n",
                   __func__, block.nTime, tAllowBigger);
-        pblocktree->ActivateFork(SIZE_FORK_VERSION, pindex->GetBlockHash());
+        pblocktree->ActivateForkBit(FORK_BIT_2MB, pindex->GetBlockHash());
         sizeForkTime.store(tAllowBigger);
     }
 
@@ -2300,9 +2300,9 @@ bool static DisconnectTip(CValidationState &state) {
     mempool.check(pcoinsTip);
 
     // Re-org past the size fork, reset activation condition:
-    if (pblocktree->ForkActivated(SIZE_FORK_VERSION) == pindexDelete->GetBlockHash()) {
+    if (pblocktree->ForkBitActivated(FORK_BIT_2MB) == pindexDelete->GetBlockHash()) {
         LogPrintf("%s: re-org past size fork\n", __func__);
-        pblocktree->ActivateFork(SIZE_FORK_VERSION, uint256());
+        pblocktree->ActivateForkBit(FORK_BIT_2MB, uint256());
         sizeForkTime.store(std::numeric_limits<uint64_t>::max());
     }
 
@@ -3333,7 +3333,7 @@ bool static LoadBlockIndexDB()
 
     // If the max-block-size fork threshold was reached, update
     // chainparams so big blocks are allowed:
-    uint256 sizeForkHash = pblocktree->ForkActivated(SIZE_FORK_VERSION);
+    uint256 sizeForkHash = pblocktree->ForkBitActivated(FORK_BIT_2MB);
     if (sizeForkHash != uint256()) {
         BlockMap::iterator it = mapBlockIndex.find(sizeForkHash);
         assert(it != mapBlockIndex.end());
@@ -5393,6 +5393,14 @@ void SizeForkTime::store(uint64_t _t)
     t = _t;
 }
 
+uint32_t ForkBits(uint32_t nTime) {
+    uint32_t bits = 0;
+    AssertLockHeld(cs_main);
+    // Vote for 2 MB until the fork time to show continued support
+    if (sizeForkTime.load() < nTime && (GetBoolArg("-vote2mb", DEFAULT_2MB_VOTE) || (pblocktree->ForkBitActivated(FORK_BIT_2MB) != uint256())))
+        bits |= FORK_BIT_2MB;
+    return bits;
+}
 
 class CMainCleanup
 {

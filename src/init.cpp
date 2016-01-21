@@ -406,6 +406,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-blockminsize=<n>", strprintf(_("Set minimum block size in bytes (default: %u)"), 0));
     strUsage += HelpMessageOpt("-blockmaxsize=<n>", _("Set maximum block size in bytes (default: max allowable)"));
     strUsage += HelpMessageOpt("-blockprioritysize=<n>", strprintf(_("Set maximum size of high-priority/low-fee transactions in bytes (default: 1/%d of the max block size)"), DEFAULT_BLOCK_PRIORITY_SIZE_FRAC));
+    strUsage += HelpMessageOpt("-vote2mb", strprintf(_("Vote for the 2 MB hard fork (default: %u"), DEFAULT_2MB_VOTE));
 
     strUsage += HelpMessageGroup(_("RPC server options:"));
     strUsage += HelpMessageOpt("-server", _("Accept command line and JSON-RPC commands"));
