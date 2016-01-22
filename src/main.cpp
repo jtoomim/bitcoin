@@ -1181,8 +1181,13 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState &state, const C
 
         // Check against previous transactions
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
-        if (!CheckInputs(tx, state, view, true, STANDARD_SCRIPT_VERIFY_FLAGS, true))
+        ValidationCostTracker costTracker(MAX_BLOCK_SIGOPS, MAX_BLOCK_SIGHASH);
+        if (!CheckInputs(tx, state, view, true, STANDARD_SCRIPT_VERIFY_FLAGS, true, &costTracker))
             return false;
+
+        // Now that we've run CheckInputs, we know how much this tx costs to validate.
+        entry.SetSighashBytes(costTracker.GetSighashBytes());
+        entry.SetTrueSigOpCount(costTracker.GetSigOps());
 
         // Check again against just the consensus-critical mandatory script
         // verification flags, in case of bugs in the standard flags that cause
@@ -1193,7 +1198,7 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState &state, const C
         // There is a similar check in CreateNewBlock() to prevent creating
         // invalid blocks, however allowing such transactions into the mempool
         // can be exploited as a DoS attack.
-        if (!CheckInputs(tx, state, view, true, MANDATORY_SCRIPT_VERIFY_FLAGS, true))
+        if (!CheckInputs(tx, state, view, true, MANDATORY_SCRIPT_VERIFY_FLAGS, true, NULL))
         {
             return error("%s: BUG! PLEASE REPORT THIS! ConnectInputs failed against MANDATORY but not STANDARD flags %s, %s",
                 __func__, hash.ToString(), FormatStateMessage(state));
@@ -1571,9 +1576,17 @@ void UpdateCoins(const CTransaction& tx, CValidationState &state, CCoinsViewCach
 }
 
 bool CScriptCheck::operator()() {
+    if (costTracker && !costTracker->IsWithinLimits())
+        return false; // Don't do any more checks if already past limits
+
     const CScript &scriptSig = ptxTo->vin[nIn].scriptSig;
-    if (!VerifyScript(scriptSig, scriptPubKey, nFlags, CachingTransactionSignatureChecker(ptxTo, nIn, cacheStore), &error)) {
+    CachingTransactionSignatureChecker checker(ptxTo, nIn, cacheStore);
+    if (!VerifyScript(scriptSig, scriptPubKey, nFlags, checker, &error)) {
         return false;
+    }
+    if (costTracker) {
+        if (!costTracker->Update(ptxTo->GetHash(), checker.GetNumSigops(), checker.GetBytesHashed()))
+            return false;
     }
     return true;
 }
@@ -1630,8 +1643,7 @@ bool CheckTxInputs(const CTransaction& tx, CValidationState& state, const CCoins
     return true;
 }
 }// namespace Consensus
-
-bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsViewCache &inputs, bool fScriptChecks, unsigned int flags, bool cacheStore, std::vector<CScriptCheck> *pvChecks)
+bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsViewCache &inputs, bool fScriptChecks, unsigned int flags, bool cacheStore, ValidationCostTracker* costTracker, std::vector<CScriptCheck> *pvChecks)
 {
     if (!tx.IsCoinBase())
     {
@@ -1655,7 +1667,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsVi
                 assert(coins);
 
                 // Verify signature
-                CScriptCheck check(*coins, tx, i, flags, cacheStore);
+                CScriptCheck check(costTracker, *coins, tx, i, flags, cacheStore);
                 if (pvChecks) {
                     pvChecks->push_back(CScriptCheck());
                     check.swap(pvChecks->back());
@@ -1667,7 +1679,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsVi
                         // arguments; if so, don't trigger DoS protection to
                         // avoid splitting the network between upgraded and
                         // non-upgraded nodes.
-                        CScriptCheck check2(*coins, tx, i,
+                        CScriptCheck check2(NULL, *coins, tx, i,
                                 flags & ~STANDARD_NOT_MANDATORY_VERIFY_FLAGS, cacheStore);
                         if (check2())
                             return state.Invalid(false, REJECT_NONSTANDARD, strprintf("non-mandatory-script-verify-flag (%s)", ScriptErrorString(check.GetScriptError())));
@@ -2069,11 +2081,16 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     CBlockUndo blockundo;
 
+    // Pre-fork, legacy sigop counting is used, unlimited resource tracker
+    // Post-fork, accurately counted sigop/sighash limits are used
+    ValidationCostTracker costTracker(MaxBlockSigops(block.nTime), MaxBlockSighash(block.nTime));
+
     CCheckQueueControl<CScriptCheck> control(fScriptChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
 
     CAmount nFees = 0;
     int nInputs = 0;
-    unsigned int nSigOps = 0;
+    uint32_t nSigOps = 0;
+    uint32_t nMaxLegacySigops = MaxLegacySigops(block.nTime);
     CDiskTxPos pos(pindex->GetBlockPos(), GetSizeOfCompactSize(block.vtx.size()));
     std::vector<std::pair<uint256, CDiskTxPos> > vPos;
     vPos.reserve(block.vtx.size());
@@ -2084,7 +2101,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
         nInputs += tx.vin.size();
         nSigOps += GetLegacySigOpCount(tx);
-        if (nSigOps > MAX_BLOCK_SIGOPS)
+        if (nSigOps > nMaxLegacySigops)
             return state.DoS(100, error("ConnectBlock(): too many sigops"),
                              REJECT_INVALID, "bad-blk-sigops");
 
@@ -2100,7 +2117,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 // this is to prevent a "rogue miner" from creating
                 // an incredibly-expensive-to-validate block.
                 nSigOps += GetP2SHSigOpCount(tx, view);
-                if (nSigOps > MAX_BLOCK_SIGOPS)
+                if (nSigOps > nMaxLegacySigops)
                     return state.DoS(100, error("ConnectBlock(): too many sigops"),
                                      REJECT_INVALID, "bad-blk-sigops");
             }
@@ -2109,7 +2126,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
             std::vector<CScriptCheck> vChecks;
             bool fCacheResults = fJustCheck; /* Don't cache results if we're actually connecting blocks (still consult the cache, though) */
-            if (!CheckInputs(tx, state, view, fScriptChecks, flags, fCacheResults, nScriptCheckThreads ? &vChecks : NULL))
+            if (!CheckInputs(tx, state, view, fScriptChecks, flags, fCacheResults, &costTracker, nScriptCheckThreads ? &vChecks : NULL))
                 return error("ConnectBlock(): CheckInputs on %s failed with %s",
                     tx.GetHash().ToString(), FormatStateMessage(state));
             control.Add(vChecks);
@@ -3017,7 +3034,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
     {
         nSigOps += GetLegacySigOpCount(tx);
     }
-    if (nSigOps > MAX_BLOCK_SIGOPS)
+    if (nSigOps > MaxLegacySigops(block.nTime))
         return state.DoS(100, error("CheckBlock(): out-of-bounds SigOpCount"),
                          REJECT_INVALID, "bad-blk-sigops");
 
@@ -5714,6 +5731,29 @@ unsigned int MaxBlockSize(uint32_t nBlockTime)
     if (nBlockTime < sizeForkTime.load())
         return OLD_MAX_BLOCK_SIZE;
     return MAX_BLOCK_SIZE;
+}
+
+/** Maximum size of a block */
+unsigned int MaxBlockSigops(uint32_t nBlockTime)
+{
+    if (nBlockTime < sizeForkTime.load())
+        return std::numeric_limits<uint32_t>::max(); // Use old way of counting
+    return MAX_BLOCK_SIGOPS;
+}
+/** Maximum size of a block */
+unsigned int MaxBlockSighash(uint32_t nBlockTime)
+{
+    if (nBlockTime < sizeForkTime.load())
+        return std::numeric_limits<uint32_t>::max(); // no limit before
+    return MAX_BLOCK_SIGHASH;
+}
+
+/** Maximum legacy (miscounted) sigops in a block */
+uint32_t MaxLegacySigops(uint32_t nBlockTime)
+{
+    if (nBlockTime < sizeForkTime.load())
+        return MAX_BLOCK_SIGOPS;
+    return std::numeric_limits<uint32_t>::max(); // Use accurately-counted limit
 }
 
 uint32_t ForkBits(uint32_t nTime) {

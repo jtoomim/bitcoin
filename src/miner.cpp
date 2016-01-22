@@ -111,7 +111,9 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
     bool fPrintPriority = GetBoolArg("-printpriority", DEFAULT_PRINTPRIORITY);
     uint64_t nBlockSize = 1000;
     uint64_t nBlockTx = 0;
+    unsigned int nBlockLegacySigOps = 100;
     unsigned int nBlockSigOps = 100;
+    uint64_t nBlockSighashBytes = 0;
     int lastFewTxs = 0;
     CAmount nFees = 0;
 
@@ -129,6 +131,10 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
             pblock->nVersion = GetArg("-blockversion", pblock->nVersion);
 
         UpdateTime(pblock, Params().GetConsensus(), pindexPrev);
+
+        uint32_t nMaxLegacySigops = MaxLegacySigops(pblock->nTime);
+        uint32_t nMaxBlockSigops = MaxBlockSigops(pblock->nTime);
+        uint32_t nMaxBlockSighashBytes = MaxBlockSighash(pblock->nTime);
 
         uint32_t nConsensusMaxSize = MaxBlockSize(pblock->nTime);
         // Largest block you're willing to create, defaults to being the biggest possible.
@@ -235,9 +241,25 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
             if (!IsFinalTx(tx, nHeight, nLockTimeCutoff))
                 continue;
 
-            unsigned int nTxSigOps = iter->GetSigOpCount();
-            if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS) {
-                if (nBlockSigOps > MAX_BLOCK_SIGOPS - 2) {
+            unsigned int nTxLegacySigOps = iter->GetSigOpCount();
+            if (nBlockLegacySigOps + nTxLegacySigOps >= nMaxLegacySigops) {
+                if (nBlockLegacySigOps > nMaxLegacySigops - 2) {
+                    break;
+                }
+                continue;
+            }
+
+            unsigned int nTxSigOps = iter->GetTrueSigOpCount();
+            if (nBlockSigOps + nTxSigOps >= nMaxBlockSigops) {
+                if (nBlockSigOps > nMaxBlockSigops - 2) {
+                    break;
+                }
+                continue;
+            }
+
+            uint64_t nTxSighashBytes = iter->GetSighashBytes();
+            if (nBlockSighashBytes + nTxSighashBytes >= nMaxBlockSighashBytes) {
+                if (nBlockSighashBytes > nMaxBlockSighashBytes - 200) {
                     break;
                 }
                 continue;
@@ -247,10 +269,12 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
             // Added
             pblock->vtx.push_back(tx);
             pblocktemplate->vTxFees.push_back(nTxFees);
-            pblocktemplate->vTxSigOps.push_back(nTxSigOps);
+            pblocktemplate->vTxSigOps.push_back(nTxLegacySigOps);
             nBlockSize += nTxSize;
             ++nBlockTx;
+            nBlockLegacySigOps += nTxLegacySigOps;
             nBlockSigOps += nTxSigOps;
+            nBlockSighashBytes += nTxSighashBytes;
             nFees += nTxFees;
 
             if (fPrintPriority)
@@ -285,7 +309,8 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
         }
         nLastBlockTx = nBlockTx;
         nLastBlockSize = nBlockSize;
-        LogPrintf("CreateNewBlock(): total size %u txs: %u fees: %ld sigops %d\n", nBlockSize, nBlockTx, nFees, nBlockSigOps);
+        LogPrintf("CreateNewBlock(): total size %u txs: %u fees: %ld old sigops: %u new sigops: %u sighash bytes: %llu\n", 
+                  nBlockSize, nBlockTx, nFees, nBlockLegacySigOps, nBlockSigOps, nBlockSighashBytes);
 
         // Compute final coinbase transaction.
         txNew.vout[0].nValue = nFees + GetBlockSubsidy(nHeight, chainparams.GetConsensus());

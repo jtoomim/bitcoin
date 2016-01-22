@@ -69,6 +69,8 @@ private:
     CAmount inChainInputValue; //! Sum of all txin values that are already in blockchain
     bool spendsCoinbase; //! keep track of transactions that spend a coinbase
     unsigned int sigOpCount; //! Legacy sig ops plus P2SH sig op count
+    unsigned int trueSigOpCount=0; // Accurate sig ops as per BIP101
+    uint64_t sighashBytes=0; // How many bytes do we have to hash to verify this tx?
     int64_t feeDelta; //! Used for determining the priority of the transaction for mining in a block
 
     // Information about descendants of this transaction that are in the
@@ -99,8 +101,12 @@ public:
     unsigned int GetHeight() const { return entryHeight; }
     bool WasClearAtEntry() const { return hadNoDependencies; }
     unsigned int GetSigOpCount() const { return sigOpCount; }
+    unsigned int GetTrueSigOpCount() const { return trueSigOpCount; }
+    uint64_t GetSighashBytes() const { return sighashBytes; }
     int64_t GetModifiedFee() const { return nFee + feeDelta; }
     size_t DynamicMemoryUsage() const { return nUsageSize; }
+    void SetTrueSigOpCount(unsigned int trueSigOps) {trueSigOpCount = trueSigOps;}
+    void SetSighashBytes(uint64_t nBytes) {sighashBytes = nBytes;} 
 
     // Adjusts the descendant state, if this entry is not dirty.
     void UpdateState(int64_t modifySize, CAmount modifyFee, int64_t modifyCount);
